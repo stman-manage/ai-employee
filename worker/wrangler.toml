@@ -1,0 +1,31 @@
+name = "ai-employee"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Serve the dashboard static assets (built in Step 6) from ./public
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Workers AI binding -> env.AI.run("@cf/zai-org/glm-4.7-flash", ...)
+[ai]
+binding = "AI"
+
+# D1 database binding. database_id is filled in at deploy time (Step 3)
+# after `wrangler d1 create ai_employee`.
+[[d1_databases]]
+binding = "DB"
+database_name = "ai_employee"
+database_id = "PLACEHOLDER_FILLED_AT_DEPLOY"
+
+[vars]
+# Model id (overridable). GLM-4.7-Flash confirmed in the Workers AI catalog.
+MODEL = "@cf/zai-org/glm-4.7-flash"
+# Max agent steps per job before forcing a stop (protects the free Neuron budget).
+MAX_STEPS = "20"
+
+# Secrets (set via `wrangler secret put`, never committed) in Step 3:
+#   RENDER_RUNNER_URL        -> https://<service>.onrender.com
+#   RUNNER_INTERNAL_TOKEN    -> shared secret guarding Render /run-tool
+#   WEBHOOK_SECRET           -> shared secret guarding POST /api/webhook/task

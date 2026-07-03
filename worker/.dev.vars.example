@@ -1,0 +1,4 @@
+RENDER_RUNNER_URL=https://your-runner.onrender.com
+RUNNER_INTERNAL_TOKEN=replace-with-strong-secret
+WEBHOOK_SECRET=replace-with-strong-secret
+SELF_URL=https://ai-employee.<subdomain>.workers.dev

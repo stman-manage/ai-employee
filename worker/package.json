@@ -1,0 +1,16 @@
+{
+  "name": "ai-employee-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker backend for the cloud-only AI employee (agent brain, webhook, chat, SSE, D1 storage).",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute ai_employee --file=./schema.sql --remote",
+    "db:init:local": "wrangler d1 execute ai_employee --file=./schema.sql --local"
+  },
+  "devDependencies": {
+    "wrangler": "^3.114.1"
+  }
+}

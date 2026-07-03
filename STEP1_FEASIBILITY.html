@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Employee — Step 1 Feasibility Report</title>
+<style>
+  :root{--ink:#1a1a1a;--muted:#5c5c5c;--faint:#8a8a8a;--line:#e6e6e6;--accent:#f6821f;--ok:#0a7d3c;--warn:#b25f00;--bg:#fff;--card:#fafafa;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55;}
+  .wrap{max-width:920px;margin:0 auto;padding:48px 28px 90px;}
+  h1,h2,h3{font-family:Georgia,"Times New Roman",serif;font-weight:600;letter-spacing:-.01em;}
+  h1{font-size:34px;margin:0 0 6px;}
+  .sub{color:var(--muted);font-size:16px;margin:0 0 26px;}
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:10px;padding:18px 20px;margin:0 0 30px;}
+  .verdict b{color:var(--ok);}
+  nav{font-size:13.5px;color:var(--muted);margin:0 0 34px;padding:14px 18px;background:var(--card);border:1px solid var(--line);border-radius:10px;}
+  nav a{color:var(--ink);text-decoration:none;margin-right:16px;white-space:nowrap;}
+  nav a:hover{color:var(--accent);}
+  h2{font-size:23px;margin:40px 0 6px;padding-top:10px;border-top:1px solid var(--line);}
+  h2 .n{color:var(--accent);font-family:-apple-system,sans-serif;font-size:15px;vertical-align:middle;margin-right:8px;}
+  h3{font-size:16px;margin:22px 0 6px;}
+  p{margin:8px 0;}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:600;}
+  td code,p code,li code{background:#f0f0f0;border-radius:4px;padding:1px 6px;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;}
+  .pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:20px;}
+  .yes{background:#e5f5ec;color:var(--ok);}
+  .cond{background:#fbeede;color:var(--warn);}
+  pre{background:#1e1e1e;color:#e8e8e8;border-radius:10px;padding:18px 20px;overflow:auto;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;}
+  pre .c{color:#7fbf7f;}
+  pre .k{color:#e0a458;}
+  .flag{background:#fbf6ee;border:1px solid #f0e2cc;border-left:4px solid var(--warn);border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;}
+  .flag b{color:var(--warn);}
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;margin:16px 0;}
+  ul{margin:8px 0;padding-left:22px;}
+  li{margin:4px 0;}
+  .src{font-size:12.5px;color:var(--faint);}
+  .src a{color:var(--faint);}
+  footer{margin-top:46px;padding-top:16px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI Employee — Feasibility &amp; Setup Plan</h1>
+  <p class="sub">Step 1 report · Cloudflare (free) + BrowserAct (paid) + Render (free) + GitHub (free) · verified July 2, 2026</p>
+
+  <div class="verdict">
+    <b>Verdict: FEASIBLE on the free stack you specified.</b> Every required capability is confirmed available with no additional paid service and no billing enabled. Three architectural constraints need design decisions (not blockers) — all flagged below in orange.
+  </div>
+
+  <nav>
+    <a href="#browseract">1 · BrowserAct CLI</a>
+    <a href="#cloudflare">2 · Cloudflare</a>
+    <a href="#render">3 · Render</a>
+    <a href="#dockerfile">4 · Dockerfile</a>
+    <a href="#blueprint">5 · Blueprint</a>
+    <a href="#flags">6 · Constraints</a>
+  </nav>
+
+  <!-- BROWSERACT -->
+  <h2 id="browseract"><span class="n">01</span>BrowserAct CLI — environment requirements</h2>
+  <p>Verified against the official docs (<span class="src"><a href="https://docs.browseract.com/agent-cli/command-reference">command-reference</a>, <a href="https://browseract.mintlify.app/agent-cli/installation">installation</a>).</span></p>
+  <table>
+    <tr><th>Requirement</th><th>Status</th><th>Evidence</th></tr>
+    <tr><td>Runs in Docker / Linux</td><td><span class="pill yes">YES</span></td><td>Python-based CLI, officially supports Windows/macOS/<b>Linux</b>. Installs via <code>uv tool install browser-act-cli --python 3.12</code> — clean to bake into a Docker image.</td></tr>
+    <tr><td>Non-interactive auth</td><td><span class="pill yes">YES</span></td><td><code>browser-act auth set &lt;api_key&gt;</code> sets the key with no prompt (also <code>auth login</code>/<code>auth poll</code>/<code>auth clear</code>). Key can be injected from a Render secret at boot.</td></tr>
+    <tr><td>Runs browser sessions</td><td><span class="pill yes">YES</span></td><td><code>browser create --type chrome|chrome-direct|stealth</code>, <code>browser open</code>, named <code>--session &lt;name&gt;</code>, <code>session list</code>/<code>close</code>. Full nav/click/input/select/type/scroll/upload set.</td></tr>
+    <tr><td>Screenshots</td><td><span class="pill yes">YES</span></td><td><code>screenshot [path] [--full]</code> writes to disk — we return the file/base64 to the dashboard.</td></tr>
+    <tr><td>Session / page info</td><td><span class="pill yes">YES</span></td><td><code>state</code> returns model-friendly indexed page state; <code>get text/html/markdown/title</code>, <code>network requests</code>, <code>--format json</code> for machine parsing.</td></tr>
+  </table>
+  <p>Every tool in your allowed list maps cleanly to a CLI command:</p>
+  <table>
+    <tr><th>Agent tool</th><th>BrowserAct CLI mapping</th></tr>
+    <tr><td><code>open_url</code></td><td><code>browser open</code> / <code>navigate &lt;url&gt;</code></td></tr>
+    <tr><td><code>extract_page_text</code></td><td><code>get markdown</code> / <code>get text</code> / <code>stealth-extract &lt;url&gt;</code></td></tr>
+    <tr><td><code>click</code> / <code>type_text</code></td><td><code>click &lt;index&gt;</code> / <code>input &lt;index&gt; &lt;text&gt;</code> / <code>type</code></td></tr>
+    <tr><td><code>screenshot</code></td><td><code>screenshot --full</code></td></tr>
+    <tr><td><code>get_current_state</code></td><td><code>state --format json</code></td></tr>
+    <tr><td><code>search_web</code></td><td><code>navigate</code> to a search engine, then <code>get markdown</code> (BrowserAct has no native search primitive)</td></tr>
+    <tr><td><code>ask_user</code> / <code>final_answer</code></td><td>handled in the Cloudflare agent loop, not the CLI</td></tr>
+  </table>
+  <div class="flag"><b>Flag A — visible-browser scope.</b> BrowserAct <code>stealth</code> browsers run on <b>BrowserAct's cloud</b>, not inside the Render container — so noVNC will <b>not</b> show them. noVNC will only show a <b>local Chromium</b> (<code>--type chrome</code>) launched inside the container under Xvfb. For a live view of a hosted stealth session, BrowserAct's own <code>remote-assist --objective "…"</code> generates a live URL we can embed instead. <b>Decision needed:</b> local-Chromium-in-container (full noVNC control, less stealth) vs. hosted stealth + remote-assist embed (best stealth, view only on demand). I recommend running local Chromium in the container for the visible pane and reserving stealth for anti-bot sites.</div>
+
+  <!-- CLOUDFLARE -->
+  <h2 id="cloudflare"><span class="n">02</span>Cloudflare Free — Workers / LLM / storage</h2>
+  <table>
+    <tr><th>Capability</th><th>Status</th><th>Notes</th></tr>
+    <tr><td>Workers AI</td><td><span class="pill yes">LIVE</span></td><td>Confirmed on your account (<code>sanstitremanagement@gmail.com</code>): dashboard shows <b>0/10,000 Neurons used today</b>. Free allotment = 10k Neurons/day.</td></tr>
+    <tr><td>GLM-4.7-Flash</td><td><span class="pill yes">YES</span></td><td><code>@cf/zai-org/glm-4.7-flash</code> is in the catalog — 131,072-token context, <b>multi-turn tool calling</b> + reasoning. Exactly right for an agent loop. Priced $0.06/M in, $0.40/M out (drawn from the free Neuron pool first).</td></tr>
+    <tr><td>D1 (SQL)</td><td><span class="pill yes">YES (preferred)</span></td><td>Free tier: 5 GB storage, 5M rows read/day, 100k writes/day. Ideal for jobs / chat / steps / tool_results tables.</td></tr>
+    <tr><td>KV (fallback)</td><td><span class="pill yes">YES</span></td><td>Available as fallback if D1 is ever restricted — 100k reads/day, 1k writes/day.</td></tr>
+    <tr><td>Webhook + REST endpoints</td><td><span class="pill yes">YES</span></td><td>Plain Worker fetch handler — all six endpoints fit one Worker.</td></tr>
+    <tr><td>Live event stream</td><td><span class="pill cond">SSE recommended</span></td><td>SSE (<code>text/event-stream</code>) runs on a <b>plain free Worker</b> with no extra parts. True WebSockets need a Durable Object (free tier requires <code>new_sqlite_classes</code> migration). <b>Recommend SSE</b> for <code>GET /api/jobs/:id/events</code>.</td></tr>
+    <tr><td>Dashboard UI</td><td><span class="pill yes">YES</span></td><td>Cloudflare Pages (or Worker static assets) — free.</td></tr>
+    <tr><td>Secrets</td><td><span class="pill yes">YES</span></td><td>Wrangler secrets (BrowserAct key, RUNNER token, Render URL). Deploy via Wrangler + an "Edit Cloudflare Workers" API token — your confirmed reliable path.</td></tr>
+  </table>
+  <div class="flag"><b>Flag B — Neuron budget.</b> The free 10k Neurons/day is generous for chat but a long multi-step agent loop with a 131k-context model can burn it. Beyond the daily free pool the model is throttled on the free plan (it does <b>not</b> silently bill you). Mitigation: keep prompts compact (send indexed <code>state</code>, not full HTML), cap steps per job, and log Neuron usage. No billing is ever enabled.</div>
+
+  <!-- RENDER -->
+  <h2 id="render"><span class="n">03</span>Render Free — Docker runner + visible browser</h2>
+  <table>
+    <tr><th>Requirement</th><th>Status</th><th>Notes</th></tr>
+    <tr><td>Free Docker web service</td><td><span class="pill yes">YES</span></td><td>Free instances support Docker (Dockerfile build or prebuilt image). No credit card, does not expire.</td></tr>
+    <tr><td>Outbound HTTPS</td><td><span class="pill yes">YES</span></td><td>Allowed (to BrowserAct cloud + Cloudflare). Counts toward monthly free bandwidth.</td></tr>
+    <tr><td>noVNC streaming</td><td><span class="pill yes">YES</span></td><td>noVNC is just HTTP + WebSocket on the service's public port. Render free services accept inbound WebSockets. Xvfb + x11vnc + websockify + noVNC all run inside the container.</td></tr>
+    <tr><td>Subprocesses (CLI, Chromium)</td><td><span class="pill yes">YES</span></td><td>Full container — supervisord can run Xvfb, Chromium, x11vnc, websockify and the Node API together.</td></tr>
+  </table>
+  <div class="flag"><b>Flag C — free-tier physics.</b> Three real limits to design around: (1) <b>One public port only</b> — the Node server must bind <code>0.0.0.0:$PORT</code> (default 10000) and serve <code>/health</code>, <code>/run-tool</code>, and proxy <code>/vnc</code> WebSockets all on that single port. (2) <b>Spin-down after 15 min idle</b> → cold start of up to ~1 min on the next request; an open noVNC WebSocket keeps it warm. (3) <b>512 MB RAM</b> — Chromium + Xvfb + noVNC is tight; we run a single low-res Chromium (e.g. 1280×720) and one tab to stay within it. HTTP Basic Auth gates <code>/vnc</code>; the <code>RUNNER_INTERNAL_TOKEN</code> header gates <code>/run-tool</code>.</div>
+
+  <!-- DOCKERFILE -->
+  <h2 id="dockerfile"><span class="n">04</span>Proposed Dockerfile (draft — not for execution yet)</h2>
+<pre><span class="c"># Render free Docker service: BrowserAct CLI + visible Chromium + noVNC</span>
+<span class="k">FROM</span> node:20-bookworm-slim
+
+<span class="k">ENV</span> DEBIAN_FRONTEND=noninteractive DISPLAY=:99 SCREEN=1280x720x24
+
+<span class="c"># System: Chromium, virtual display, VNC bridge, noVNC, python+uv for the CLI</span>
+<span class="k">RUN</span> apt-get update && apt-get install -y --no-install-recommends \
+      chromium xvfb x11vnc novnc websockify \
+      python3 python3-pip curl ca-certificates supervisor tini \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && /root/.local/bin/uv tool install browser-act-cli --python 3.12 \
+    && rm -rf /var/lib/apt/lists/*
+
+<span class="k">ENV</span> PATH="/root/.local/bin:/root/.local/share/uv/tools/browser-act-cli/bin:$PATH"
+
+<span class="k">WORKDIR</span> /app
+<span class="k">COPY</span> package*.json ./
+<span class="k">RUN</span> npm ci --omit=dev
+<span class="k">COPY</span> . .
+
+<span class="c"># Single public port (Render sets $PORT, default 10000); 0.0.0.0 bind.</span>
+<span class="c"># Node server: /health, /run-tool (token auth), and proxies /vnc (basic auth) -> websockify.</span>
+<span class="k">EXPOSE</span> 10000
+<span class="k">ENTRYPOINT</span> ["/usr/bin/tini","--"]
+<span class="k">CMD</span> ["/usr/bin/supervisord","-c","/app/supervisord.conf"]
+</pre>
+  <p class="src">supervisord runs: <code>Xvfb :99</code> → <code>chromium --no-sandbox</code> (or launched on demand by the CLI) → <code>x11vnc</code> → <code>websockify</code>/noVNC → <code>node server.js</code>. On boot, server runs <code>browser-act auth set $BROWSERACT_API_KEY</code>. Exact files come in Step 4.</p>
+
+  <!-- BLUEPRINT -->
+  <h2 id="blueprint"><span class="n">05</span>High-level system blueprint</h2>
+  <div class="diagram">
+  <svg viewBox="0 0 860 470" width="100%" role="img" aria-label="System architecture diagram">
+    <defs>
+      <marker id="arw" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L9,5 L0,10 z" fill="#8a8a8a"/></marker>
+      <style>.box{fill:#fafafa;stroke:#d9d9d9;} .lbl{font:600 14px -apple-system,sans-serif;fill:#1a1a1a;} .s{font:12px -apple-system,sans-serif;fill:#5c5c5c;} .ln{stroke:#8a8a8a;stroke-width:1.6;fill:none;} .tag{font:11px -apple-system,sans-serif;fill:#8a8a8a;}</style>
+    </defs>
+    <!-- user -->
+    <rect class="box" x="300" y="16" width="260" height="58" rx="10"/>
+    <text class="lbl" x="430" y="40" text-anchor="middle">User Browser</text>
+    <text class="s" x="430" y="58" text-anchor="middle">chat · dashboard · live viewer iframe</text>
+    <line class="ln" x1="430" y1="74" x2="430" y2="112" marker-end="url(#arw)"/>
+    <!-- cloudflare -->
+    <rect class="box" x="220" y="114" width="420" height="118" rx="10" style="stroke:#f6821f;"/>
+    <text class="lbl" x="430" y="136" text-anchor="middle">Cloudflare Worker + Pages (Free)</text>
+    <text class="s" x="430" y="158" text-anchor="middle">webhook · agent loop + tools · SSE events</text>
+    <text class="s" x="430" y="176" text-anchor="middle">Workers AI · @cf/zai-org/glm-4.7-flash</text>
+    <text class="s" x="430" y="194" text-anchor="middle">D1: jobs · chat · steps · tool_results</text>
+    <text class="tag" x="430" y="216" text-anchor="middle">6 endpoints: /health · /webhook/task · /jobs/:id(/chat /events)</text>
+    <line class="ln" x1="430" y1="232" x2="430" y2="272" marker-end="url(#arw)"/>
+    <text class="tag" x="530" y="256" text-anchor="middle">HTTPS + RUNNER token</text>
+    <!-- render -->
+    <rect class="box" x="240" y="274" width="380" height="116" rx="10"/>
+    <text class="lbl" x="430" y="296" text-anchor="middle">Render Docker Service (Free)</text>
+    <text class="s" x="430" y="318" text-anchor="middle">Node /run-tool (token) · /health · /vnc (basic auth)</text>
+    <text class="s" x="430" y="336" text-anchor="middle">BrowserAct CLI · Chromium + Xvfb</text>
+    <text class="s" x="430" y="354" text-anchor="middle">x11vnc + websockify + noVNC · single port</text>
+    <text class="tag" x="430" y="378" text-anchor="middle">/vnc streamed back to the dashboard iframe</text>
+    <line class="ln" x1="430" y1="390" x2="430" y2="418" marker-end="url(#arw)"/>
+    <!-- browseract -->
+    <rect class="box" x="300" y="420" width="260" height="42" rx="10"/>
+    <text class="lbl" x="430" y="446" text-anchor="middle">BrowserAct Platform (paid)</text>
+  </svg>
+  </div>
+  <p><b>Job lifecycle:</b> webhook → Worker creates a D1 job → agent loop calls GLM-4.7-Flash → model emits a tool call → Worker POSTs <code>/run-tool</code> on Render (token-authed) → CLI acts in Chromium → screenshot/state returned → step logged to D1 → streamed to the dashboard over SSE → repeat until <code>final_answer</code> or <code>ask_user</code>. The live Chromium is watchable in real time via the embedded noVNC pane. Nothing runs on your machine; nothing outside BrowserAct is paid.</p>
+
+  <!-- FLAGS -->
+  <h2 id="flags"><span class="n">06</span>Open decisions before Step 2</h2>
+  <ul>
+    <li><b>Visible browser mode (Flag A):</b> local Chromium in container for full noVNC control (my recommendation), vs. hosted stealth + <code>remote-assist</code> embed for max anti-bot resilience.</li>
+    <li><b>Event transport (Flag B):</b> SSE on a plain Worker (simpler, fully free — my recommendation) vs. WebSockets via a Durable Object.</li>
+    <li><b>Storage:</b> D1 (recommended) vs. KV. I'll proceed with D1 unless you prefer KV.</li>
+    <li><b>Runner idle/cold-start (Flag C):</b> accept ~1 min cold start on the free tier, or add a lightweight keep-alive ping (still free). I'll accept cold starts by default.</li>
+  </ul>
+
+  <footer>
+    Step 1 of the build. No code written or deployed. No billing enabled on any platform. Sources: BrowserAct docs (command-reference, installation), Cloudflare Workers AI dashboard + GLM-4.7-Flash model page, Render free-tier / Docker / WebSocket docs. Awaiting your confirmation to proceed to Step 2.
+  </footer>
+</div>
+</body>
+</html>
