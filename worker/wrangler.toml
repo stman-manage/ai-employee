@@ -17,7 +17,7 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "ai_employee"
-database_id = "PLACEHOLDER_FILLED_AT_DEPLOY"
+database_id = "3d76b07a-7bdc-4b07-99ba-15face590fbe"
 
 [vars]
 # Model id (overridable). GLM-4.7-Flash confirmed in the Workers AI catalog.

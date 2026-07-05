@@ -52,102 +52,96 @@ function buildMessages(rows) {
   return msgs;
 }
 
-// Run the agent loop for a job until it finishes, waits for user, hits MAX_STEPS,
-// or the per-invocation budget elapses (then it self-reschedules via /internal/tick).
+// Process exactly ONE agent step (one model turn + one tool), then self-chain
+// to the next tick in a fresh invocation. GLM-4.7-Flash calls take ~30-45s, so
+// running many steps in one background task would be killed; one step per
+// invocation keeps each request within a safe duration.
 export async function runAgent(env, ctx, jobId) {
   const maxSteps = parseInt(env.MAX_STEPS || "20", 10);
-  const startedAt = Date.now();
-  const BUDGET_MS = 25000; // stay well under Worker wall-clock limits per invocation
 
   let job = await getJob(env, jobId);
   if (!job) return;
   if (job.status === "done" || job.status === "error") return;
 
-  await updateJob(env, jobId, { status: "running" });
-  await emit(env, jobId, "status", { status: "running" });
+  if ((job.step_count || 0) >= maxSteps) {
+    await finishJob(env, jobId, `Reached the step limit (${maxSteps}) before completing. Stopping to protect resources.`);
+    return;
+  }
 
-  let step = job.step_count || 0;
+  if (job.status !== "running") {
+    await updateJob(env, jobId, { status: "running" });
+    await emit(env, jobId, "status", { status: "running" });
+  }
 
-  while (step < maxSteps) {
-    if (Date.now() - startedAt > BUDGET_MS) {
-      // Hand off to a fresh invocation so we never exceed the wall-clock limit.
-      await scheduleTick(env, jobId);
-      return;
-    }
+  const rows = await getMessages(env, jobId);
+  const messages = buildMessages(rows);
 
-    const rows = await getMessages(env, jobId);
-    const messages = buildMessages(rows);
+  let out;
+  try {
+    out = await env.AI.run(env.MODEL || "@cf/zai-org/glm-4.7-flash", {
+      messages,
+      tools: TOOL_DEFS,
+      max_tokens: 1024,
+    });
+  } catch (e) {
+    await failJob(env, jobId, `Model call failed: ${e.message}`);
+    return;
+  }
 
-    let out;
-    try {
-      out = await env.AI.run(env.MODEL || "@cf/zai-org/glm-4.7-flash", {
-        messages,
-        tools: TOOL_DEFS,
-        max_tokens: 1024,
-      });
-    } catch (e) {
-      await failJob(env, jobId, `Model call failed: ${e.message}`);
-      return;
-    }
+  const { text, toolCalls } = parseModelResponse(out);
+  if (text) await emit(env, jobId, "thought", { text });
 
-    const { text, toolCalls } = parseModelResponse(out);
+  if (!toolCalls.length) {
+    // No tool call -> treat the text as the final answer.
+    await addMessage(env, jobId, { role: "assistant", content: text || "(no response)" });
+    await finishJob(env, jobId, text || "(no response)");
+    return;
+  }
 
-    if (text) await emit(env, jobId, "thought", { text });
+  const call = toolCalls[0]; // one action per turn
+  await addMessage(env, jobId, { role: "assistant", content: text || "", tool_calls: [call] });
+  const step = (job.step_count || 0) + 1;
+  await updateJob(env, jobId, { step_count: step });
+  await addStep(env, jobId, { idx: step, tool: call.name, args: call.args, status: "started" });
+  await emit(env, jobId, "tool_call", { step, tool: call.name, args: call.args });
 
-    if (!toolCalls.length) {
-      // No tool call -> treat the text as the final answer.
-      await addMessage(env, jobId, { role: "assistant", content: text || "(no response)" });
-      await finishJob(env, jobId, text || "(no response)");
-      return;
-    }
+  // Control-flow tools ---------------------------------------------------
+  if (call.name === "final_answer") {
+    const summary = (call.args && call.args.summary) || text || "Done.";
+    await addMessage(env, jobId, { role: "tool", tool_name: "final_answer", content: "ok" });
+    await finishJob(env, jobId, summary);
+    return;
+  }
+  if (call.name === "ask_user") {
+    const question = (call.args && call.args.question) || "I need more information to continue.";
+    await addMessage(env, jobId, { role: "tool", tool_name: "ask_user", content: "waiting for user" });
+    await updateJob(env, jobId, { status: "waiting_user" });
+    await emit(env, jobId, "ask_user", { question });
+    return; // resumes when the user posts to /api/jobs/:id/chat
+  }
 
-    const call = toolCalls[0]; // one action per turn
-    await addMessage(env, jobId, { role: "assistant", content: text || "", tool_calls: [call] });
-    step += 1;
-    await updateJob(env, jobId, { step_count: step });
-    await addStep(env, jobId, { idx: step, tool: call.name, args: call.args, status: "started" });
-    await emit(env, jobId, "tool_call", { step, tool: call.name, args: call.args });
-
-    // Control-flow tools -------------------------------------------------
-    if (call.name === "final_answer") {
-      const summary = (call.args && call.args.summary) || text || "Done.";
-      await addMessage(env, jobId, { role: "tool", tool_name: "final_answer", content: "ok" });
-      await finishJob(env, jobId, summary);
-      return;
-    }
-    if (call.name === "ask_user") {
-      const question = (call.args && call.args.question) || "I need more information to continue.";
-      await addMessage(env, jobId, { role: "tool", tool_name: "ask_user", content: "waiting for user" });
-      await updateJob(env, jobId, { status: "waiting_user" });
-      await emit(env, jobId, "ask_user", { question });
-      return; // resumes when the user posts to /api/jobs/:id/chat
-    }
-
-    // Browser tools -> Render runner ------------------------------------
-    if (isBrowserTool(call.name)) {
-      const result = await runBrowserTool(env, jobId, call.name, call.args);
-      await addToolResult(env, jobId, {
-        step_idx: step, tool: call.name, ok: result.ok, output: result.output, error: result.error,
-      });
-      await emit(env, jobId, "tool_result", {
-        step, tool: call.name, ok: result.ok,
-        error: result.error, has_screenshot: !!result.screenshot,
-        preview: typeof result.output === "string" ? result.output.slice(0, 400) : result.output,
-      });
-      // Feed the observation back to the model.
-      const obs = result.ok
-        ? (result.screenshot ? `[screenshot captured]\n` : "") + summarize(result.output)
-        : `ERROR: ${result.error || "tool failed"}`;
-      await addMessage(env, jobId, { role: "tool", tool_name: call.name, content: obs });
-      continue;
-    }
-
+  // Browser tools -> Render runner --------------------------------------
+  if (isBrowserTool(call.name)) {
+    const result = await runBrowserTool(env, jobId, call.name, call.args);
+    await addToolResult(env, jobId, {
+      step_idx: step, tool: call.name, ok: result.ok, output: result.output, error: result.error,
+    });
+    await emit(env, jobId, "tool_result", {
+      step, tool: call.name, ok: result.ok,
+      error: result.error, has_screenshot: !!result.screenshot,
+      preview: typeof result.output === "string" ? result.output.slice(0, 400) : result.output,
+    });
+    const obs = result.ok
+      ? (result.screenshot ? `[screenshot captured]\n` : "") + summarize(result.output)
+      : `ERROR: ${result.error || "tool failed"}`;
+    await addMessage(env, jobId, { role: "tool", tool_name: call.name, content: obs });
+  } else {
     // Unknown tool (should not happen)
     await addMessage(env, jobId, { role: "tool", tool_name: call.name, content: `ERROR: unknown tool ${call.name}` });
   }
 
-  // Hit the step cap.
-  await finishJob(env, jobId, `Reached the step limit (${maxSteps}) before completing. Stopping to protect resources.`);
+  // Chain to the next step in a fresh invocation.
+  await scheduleTick(env, jobId);
 }
 
 function summarize(output) {
@@ -166,18 +160,15 @@ async function failJob(env, jobId, error) {
   await emit(env, jobId, "error", { error });
 }
 
-// Re-enter the loop in a fresh invocation (used for long jobs).
+// Chain to the next step in a fresh invocation. The /internal/tick endpoint
+// returns 200 immediately (scheduling its own waitUntil), so this fetch resolves
+// fast and each invocation only spans a single ~40s model call.
 async function scheduleTick(env, jobId) {
-  await emit(env, jobId, "status", { status: "continuing", note: "rescheduling next batch of steps" });
-  // Best-effort self-call; the tick endpoint just calls runAgent again.
-  // Uses the Worker's own URL provided via env.SELF_URL if set; otherwise the
-  // dashboard can poll and re-trigger. Non-fatal if it fails.
-  if (env.SELF_URL) {
-    try {
-      await fetch(env.SELF_URL.replace(/\/+$/, "") + `/internal/tick/${jobId}`, {
-        method: "POST",
-        headers: { "x-webhook-secret": env.WEBHOOK_SECRET || "" },
-      });
-    } catch { /* ignore */ }
-  }
+  if (!env.SELF_URL) return; // without a self URL, the dashboard can re-trigger via /chat
+  try {
+    await fetch(env.SELF_URL.replace(/\/+$/, "") + `/internal/tick/${jobId}`, {
+      method: "POST",
+      headers: { "x-webhook-secret": env.WEBHOOK_SECRET || "" },
+    });
+  } catch { /* non-fatal; next chat or poll will resume */ }
 }
