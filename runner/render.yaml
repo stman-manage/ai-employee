@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ai-employee-runner
+    runtime: docker
+    plan: free
+    rootDir: runner
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: VNC_USER
+        value: viewer
+      - key: RUNNER_INTERNAL_TOKEN
+        sync: false
+      - key: BROWSERACT_API_KEY
+        sync: false
+      - key: VNC_PASS
+        sync: false
