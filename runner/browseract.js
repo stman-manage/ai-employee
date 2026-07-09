@@ -20,6 +20,7 @@ function run(args, { session } = {}) {
   if (session) full.push("--session", session);
   full.push("--format", "json", ...args);
   return new Promise((resolve) => {
+    console.log(`[cli] spawning: ${CLI} ${full.join(" ")}`);
     const child = spawn(CLI, full, { env: { ...process.env, DISPLAY } });
     let out = "", err = "";
     const timer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 120000);
@@ -27,9 +28,14 @@ function run(args, { session } = {}) {
     child.stderr.on("data", (d) => (err += d));
     child.on("close", (code) => {
       clearTimeout(timer);
+      console.log(`[cli] exit=${code} out=${out.slice(0, 500)} err=${err.slice(0, 500)}`);
       resolve({ code, out: out.trim(), err: err.trim() });
     });
-    child.on("error", (e) => { clearTimeout(timer); resolve({ code: -1, out: "", err: e.message }); });
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      console.log(`[cli] spawn error: ${e.message}`);
+      resolve({ code: -1, out: "", err: e.message });
+    });
   });
 }
 
@@ -126,7 +132,8 @@ export async function runTool(tool, args = {}, session = "default") {
         return { ok: false, error: `unknown tool: ${tool}` };
     }
   } catch (e) {
-    return { ok: false, error: e.message };
+    console.log(`[runTool] exception for tool=${tool}: ${e.stack || e.message}`);
+    return { ok: false, error: e.message || String(e) };
   }
 }
 
